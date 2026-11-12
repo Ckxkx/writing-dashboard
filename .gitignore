@@ -1,0 +1,8 @@
+node_modules/
+main.js
+*.zip
+output/
+/writing-dashboard/
+/.obsidian/
+/dist/
+data.json
