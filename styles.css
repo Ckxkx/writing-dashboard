@@ -1,8 +1,8 @@
 .wd-host {
   overflow: auto;
-  padding: 0 !important;
   container-type: inline-size;
 }
+.workspace-leaf-content[data-type="writing-dashboard-sidebar"] .view-content.wd-host { padding: 0; }
 .wd-root {
   --wd-l0: #ebedf0;
   --wd-l1: #0e4429;
@@ -65,7 +65,7 @@
 .wd-root .wd-header-summary {
   display: flex;
   flex-wrap: wrap;
-  column-gap: 4px;
+  gap: 0 4px;
   color: var(--text-muted);
   font-size: var(--font-ui-small, 13px);
   line-height: 1.55;
@@ -138,10 +138,10 @@
   background: var(--background-secondary);
   margin-bottom: 14px;
 }
-.wd-status-button {
+button.wd-status-button, .status-bar .status-bar-item button.wd-status-button {
   appearance: none;
-  background: transparent !important;
-  box-shadow: none !important;
+  background: transparent;
+  box-shadow: none;
   border: 0;
   padding: 0 3px;
   height: auto;

@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 concurrency:
   group: writing-dashboard-release
@@ -35,13 +37,22 @@ jobs:
       - name: Package plugin
         shell: bash
         run: |
-          version=$(node -p 'require("./manifest.json").version')
           node -e 'const v = require("./manifest.json").version; if (!/^\d+\.\d+\.\d+$/.test(v) || v !== require("./package.json").version || v !== require("./package-lock.json").version) throw Error("Inconsistent release version")'
           mkdir -p dist/writing-dashboard
-          cp main.js manifest.json styles.css THIRD-PARTY-NOTICES.txt dist/writing-dashboard/
-          cd dist
-          zip -qr "writing-dashboard-$version.zip" writing-dashboard
-          sha256sum "writing-dashboard-$version.zip" > SHA256SUMS.txt
+          cp main.js manifest.json styles.css dist/writing-dashboard/
+      - name: Attest release files
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/writing-dashboard/*
+      - name: Verify artifact attestations
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          for file in dist/writing-dashboard/*; do
+            gh attestation verify "$file" --repo "$GH_REPO"
+          done
       - name: Publish GitHub Release
         uses: actions/github-script@v8
         with:
@@ -75,15 +86,14 @@ jobs:
               throw new Error('The existing draft was built from another commit.');
             }
             const release_id = release.id;
-            const zip = 'writing-dashboard-' + tag + '.zip';
-            const names = ['main.js', 'manifest.json', 'styles.css', 'THIRD-PARTY-NOTICES.txt', zip, 'SHA256SUMS.txt'];
+            const names = ['main.js', 'manifest.json', 'styles.css'];
             for (const name of names) {
               const prior = release.assets.find(asset => asset.name === name);
               if (prior) await github.rest.repos.deleteReleaseAsset({ ...target, asset_id: prior.id });
-              const data = fs.readFileSync('dist/' + (name === zip || name === 'SHA256SUMS.txt' ? name : 'writing-dashboard/' + name));
+              const data = fs.readFileSync('dist/writing-dashboard/' + name);
               await github.rest.repos.uploadReleaseAsset({
                 ...target, release_id, name, data,
-                headers: { 'content-type': name === zip ? 'application/zip' : 'application/octet-stream' },
+                headers: { 'content-type': 'application/octet-stream' },
               });
             }
             const { data: published } = await github.rest.repos.updateRelease({

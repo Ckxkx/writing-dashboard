@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.4]
+
+- Added searchable settings on Obsidian 1.13+ while retaining support for Obsidian 1.8.7+.
+- Improved validation of saved statistics and settings, and updated timers and CSS for Obsidian compatibility.
+- Adopted Apache License 2.0 and added signed build provenance for the three Obsidian release files.
+- Made English the default README; a separate Simplified Chinese README is still available.
+
+Install or update by placing main.js, manifest.json and styles.css in the same plugin folder. Keep your existing data.json.
+
 ## [0.3.3]
 
 首个 GitHub Release。
@@ -10,4 +19,5 @@
 - 提供本地笔记索引、Markdown 计数设置、路径排除及重建索引功能。
 
 支持 Obsidian 1.8.7 或更新版本。首次安装请下载 ZIP 解压；从本地开发版升级时，覆盖插件文件并保留 `data.json`。
+
 

@@ -1,7 +1,8 @@
+import { cancelTimer, scheduleTimer, type Timer } from "./timers";
 // Single writer. A change made during an in-flight save stays dirty and
 // is written in the next revision; each call receives an immutable snapshot.
 export class Storage<T> {
-  private timer: ReturnType<typeof setTimeout> | undefined;
+  private timer: Timer | undefined;
   private dirtyAt = 0;
   private revision = 0;
   private saved = 0;
@@ -20,14 +21,14 @@ export class Storage<T> {
   }
 
   private schedule(delay = Math.min(650, Math.max(0, 2500 - (Date.now() - this.dirtyAt)))): void {
-    clearTimeout(this.timer);
+    cancelTimer(this.timer);
     if (!this.closed && this.saved !== this.revision) {
-      this.timer = setTimeout(() => { void this.flush(); }, delay);
+      this.timer = scheduleTimer(() => { void this.flush(); }, delay);
     }
   }
 
   async flush(): Promise<void> {
-    clearTimeout(this.timer);
+    cancelTimer(this.timer);
     if (this.pending) await this.pending;
     if (this.saved === this.revision) return;
     if (this.pending) return this.flush();
@@ -36,7 +37,7 @@ export class Storage<T> {
     this.failed = false;
     const write = async () => {
       try {
-        const data = JSON.parse(JSON.stringify(this.read())) as T;
+        const data = structuredClone(this.read());
         await this.save(data);
         this.saved = revision;
       } catch (error) {

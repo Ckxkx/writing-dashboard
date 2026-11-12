@@ -1,66 +1,68 @@
 <div align="center">
-  <p><strong>简体中文</strong> · <a href="README.en.md">English</a></p>
+  <p><a href="README.zh-CN.md">简体中文</a> · <strong>English</strong></p>
   <h1>Writing Dashboard</h1>
-  <p><strong>在 Obsidian 右侧栏，查看每天的写作进度。</strong></p>
-  <p>年度热力图 · 月度字数趋势 · 实时统计</p>
+  <p><strong>See your writing activity without leaving Obsidian.</strong></p>
+  <p>Yearly heatmap · Monthly trends · Live word counts</p>
   <p>
-    <a href="https://github.com/Ckxkx/writing-dashboard/releases/latest"><img src="https://img.shields.io/github/v/release/Ckxkx/writing-dashboard?label=Release&amp;color=238636" alt="最新版"></a>
-    <img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?logo=obsidian&amp;logoColor=white" alt="Obsidian 1.8.7 及以上">
+    <a href="https://github.com/Ckxkx/writing-dashboard/releases/latest"><img src="https://img.shields.io/github/v/release/Ckxkx/writing-dashboard?label=Release&amp;color=238636" alt="Latest release"></a>
+    <img src="https://img.shields.io/badge/Obsidian-1.8.7%2B-7C3AED?logo=obsidian&amp;logoColor=white" alt="Obsidian 1.8.7 or later">
   </p>
-  <img src="docs/media/writing-dashboard-demo-zh.gif" alt="年度概览、热力图、月度趋势和实时字数演示" width="680">
-  <p><a href="https://raw.githubusercontent.com/Ckxkx/writing-dashboard/main/docs/media/writing-dashboard-demo-zh.mp4">下载 MP4 演示</a> · <a href="#安装">安装</a> · <a href="#使用">使用</a> · <a href="#开发">开发</a></p>
+  <img src="docs/media/writing-dashboard-demo.gif" alt="Demo of the yearly overview, heatmap, monthly trends, and live word counts" width="680">
+  <p><a href="https://raw.githubusercontent.com/Ckxkx/writing-dashboard/main/docs/media/writing-dashboard-demo.mp4">Download the MP4</a> · <a href="#installation">Install</a> · <a href="#usage">Usage</a> · <a href="#development">Development</a></p>
 </div>
 
 ---
 
-## 功能一览
+Writing Dashboard is a local writing statistics plugin for Obsidian. It shows a yearly heatmap, daily note activity, and monthly word counts in the right sidebar.
 
-| 功能 | 说明 |
+## Features
+
+| Feature | What it shows |
 | --- | --- |
-| 年度概览 | 切换年份查看写作天数和累计字数。顶部总字数与总篇数反映当前纳入统计的笔记。 |
-| 写作热力图 | 打开时定位到今天；悬停查看数据，点击日期查看并打开当天的笔记。支持键盘导航。 |
-| 月度趋势 | 比较所选年份各月累计计入的字数。 |
-| 实时统计 | 编辑时预览，Obsidian 保存后确认。桌面状态栏显示今日篇数和字数，点击可展开或收起仪表盘。 |
-| 本地索引 | 可重建索引、排除文件或目录、调整计数规则，也可以暂停追踪。 |
+| Yearly overview | Switch years to see writing days and cumulative words. The totals at the top describe the Markdown notes currently included in your vault. |
+| Writing heatmap | Opens on today. Hover over a date for statistics, then click it to see and open its notes. Keyboard navigation is supported. |
+| Monthly trends | Compare the word counts recorded for each month of the selected year. |
+| Live statistics | Preview changes as you type; Obsidian confirms them on save. The desktop status bar shows today's note and word counts and toggles the dashboard. |
+| Local index | Rebuild the index, exclude files or folders, change the counting rules, or pause tracking. |
 
-## 安装
+## Installation
 
-需要 **Obsidian 1.8.7 或更新版本**。
+Requires **Obsidian 1.8.7 or later**.
 
-1. 从 [GitHub Releases](https://github.com/Ckxkx/writing-dashboard/releases/latest) 下载 ZIP 安装包。
-2. 将包内的 `writing-dashboard` 文件夹解压到 Vault 的 `.obsidian/plugins/` 目录。若使用自定义配置目录，请替换 `.obsidian`。
-3. 重启 Obsidian，在 **设置 → 第三方插件** 中启用 **Writing Dashboard**。
+1. Download main.js, manifest.json, and styles.css from [GitHub Releases](https://github.com/Ckxkx/writing-dashboard/releases/latest).
+2. Put all three files directly in the writing-dashboard folder under .obsidian/plugins/ inside your vault. If you use a custom configuration folder, use it instead of .obsidian.
+3. Restart Obsidian and enable **Writing Dashboard** under **Settings → Community plugins**.
 
-也可将 Release 中的 `main.js`、`manifest.json` 和 `styles.css` 放入同一插件目录。升级时同时替换三份文件，**保留 `data.json`**。使用插件无需安装 Node.js 或 Git。
+To upgrade, replace all three files together and keep data.json. You do not need Node.js or Git to use the plugin.
 
-## 使用
+## Usage
 
-1. 点击左侧折线图图标或桌面底部的今日统计，也可运行 **Open Writing Dashboard**。再次点击底栏可收起正在显示的仪表盘。
-2. 选择年份或点击日期查看笔记。向左滚动热力图可查看更早的记录，点击「今天」返回。
-3. 发现遗漏时，选择 **··· → 重建索引**。重建会保留已记录的日常写作活动。
+1. Click the ribbon icon or the desktop status-bar count, or run **Writing Dashboard: Open dashboard**. Click the status bar again to close the open dashboard.
+2. Choose a year or select a date to see its notes. Scroll the heatmap left for earlier dates; use the Today button (`今天` in the screenshots) to return.
+3. If notes are missing, choose **Rebuild index** (`重建索引`) from the **···** menu. Rebuilding preserves recorded writing activity.
 
 <details>
-<summary>查看完整仪表盘截图</summary>
+<summary>View the full dashboard</summary>
 
-<img src="docs/screenshots/dashboard.png" alt="年度概览、写作热力图、笔记详情和月度趋势" width="500">
+<img src="docs/screenshots/dashboard.png" alt="Full sidebar dashboard with yearly totals, a writing heatmap, note details, and monthly trends" width="500">
 
 </details>
 
-## 统计规则
+## How counting works
 
-- **总字数与总篇数**是当前纳入统计的 Markdown 正文字数和笔记数量；删除文字会减少总字数。
-- **每日与每月字数**合并两类数据：旧笔记已有正文按索引日期计入，之后确认的新增内容按本地编辑日期计入。同一天的同一篇笔记只计一次；有正数计入字数的日期计为一个写作日。
-- **旧笔记日期**优先取文件创建时间，缺失、无效或在未来时才读取 YAML `created`。两者都无效时，笔记仍计入总量。索引无法还原插件启用前逐日的真实写作量。
-- 汉字逐字计数，英文等非汉字文本按单词计数，连续数字算一个单位。默认不计 YAML、代码块、行内代码、图片和嵌入；设置可开启 YAML 和代码块计数，行内代码始终不计。
-- 输入时显示的字数在保存后确认，相同内容不会因重复保存而重复计数。难以可靠拆分的改动会标记为未完整计量。删除内容不会扣减已确认的累计新增字数。
+- **Vault totals** reflect the number of included Markdown notes and the length of their current body text. Deleting text reduces the vault's word count.
+- **Daily and monthly counts** combine indexed text from existing notes with confirmed additions after the plugin is enabled. Indexed text uses the note's date; new additions use the local editing date. Each note counts once per day. A day with a positive word count counts as a writing day.
+- **Existing notes** use the file's creation time first and fall back to the YAML `created` field if the timestamp is missing, invalid, or in the future. If neither date works, the note still contributes to vault totals. The index cannot reconstruct what you actually wrote each day before installing the plugin.
+- Each Han character counts as one unit. Other words and continuous runs of digits count as one unit each. YAML, code blocks, inline code, images, and embeds are excluded by default. Settings can include YAML or code blocks; inline code remains excluded.
+- Preview counts are confirmed on save. Saving the same content twice does not count it twice. Changes that cannot be measured reliably are flagged. Deleting text does not subtract already confirmed additions from historical counts.
 
-## 数据与隐私
+## Data and privacy
 
-插件在本地运行，无需账户或服务器，不发送笔记或统计，也不收集遥测。设置与统计存放在 Vault 的 `.obsidian/plugins/writing-dashboard/data.json`，包含笔记路径和字数，不包含笔记正文。备份时建议先退出 Obsidian；插件不会合并多台设备同时写入的统计文件。
+Writing Dashboard runs locally and does not send notes, statistics, or telemetry. Vault totals and index builds enumerate Markdown note paths. Path exclusions are applied before reading note bodies; the plugin does not read non-Markdown files for statistics. Settings and statistics are stored in your vault's `.obsidian/plugins/writing-dashboard/data.json`. This file contains note paths and counts, but no note bodies. Quit Obsidian before backing it up. The plugin does not merge statistics written concurrently by multiple devices.
 
-## 开发
+## Development
 
-使用 Node.js 22：
+Use Node.js 22:
 
 ```sh
 npm ci
@@ -69,7 +71,11 @@ npm test
 npm run build
 ```
 
-构建生成 `main.js`；`npm run dev` 会监听改动并重新构建。[版本记录](CHANGELOG.md) · [第三方依赖许可](THIRD-PARTY-NOTICES.txt)
+The build generates `main.js`. Run `npm run dev` to rebuild on changes. [Changelog](CHANGELOG.md) · [Third-party notices](THIRD-PARTY-NOTICES.txt)
 
-遇到问题？请在 [GitHub Issues](https://github.com/Ckxkx/writing-dashboard/issues) 附上插件版本、Obsidian 版本、系统和复现步骤，无需上传整个 Vault 或 `data.json`。
+For [bug reports](https://github.com/Ckxkx/writing-dashboard/issues), include the plugin version, Obsidian version, operating system, and steps to reproduce. Do not share your entire vault or `data.json`.
 
+
+## License
+
+[Apache License 2.0](LICENSE). The compiled plugin includes the license text and third-party notices.

@@ -1,3 +1,4 @@
+import { cancelTimer, scheduleTimer, type Timer } from "./timers";
 import { Activity } from "./activity";
 import { dateKey } from "./dates";
 import { indexDate, recordedNet } from "./history";
@@ -13,16 +14,16 @@ export interface VaultSource {
 interface Task { created: boolean; day: string; mixed: boolean; silent: boolean; due: number; since: number }
 interface Draft { source: string; day: string; mixed: boolean }
 const debounce = 170, maxDelay = 650;
-const yieldUI = () => new Promise<void>(resolve => setTimeout(resolve, 0));
+const yieldUI = () => new Promise<void>(resolve => scheduleTimer(resolve, 0));
 const under = (path: string, root: string) => path === root || path.startsWith(root + "/");
 
 export class Tracker {
   private tasks = new Map<string, Task>();
   private drafts = new Map<string, Draft>();
-  private draftTimer?: ReturnType<typeof setTimeout>;
+  private draftTimer?: Timer;
   liveDays: Record<string, Day> = {};
   liveNet = 0;
-  private timer?: ReturnType<typeof setTimeout>;
+  private timer?: Timer;
   private busy = false;
   private running?: Promise<void>;
   private generation = 0;
@@ -110,11 +111,11 @@ export class Tracker {
       });
     }
     // Throttle parsing, including during continuous typing.
-    this.draftTimer ??= setTimeout(() => this.refreshDrafts(), 90);
+    this.draftTimer ??= scheduleTimer(() => this.refreshDrafts(), 90);
   }
 
   private refreshDrafts(): void {
-    clearTimeout(this.draftTimer);
+    cancelTimer(this.draftTimer);
     this.draftTimer = undefined;
     this.liveDays = {};
     this.liveNet = 0;
@@ -197,11 +198,11 @@ export class Tracker {
   }
 
   private schedule(): void {
-    clearTimeout(this.timer);
+    cancelTimer(this.timer);
     if (this.closed || this.scanning || this.busy || !this.tasks.size) return;
     let due = Infinity;
     for (const task of this.tasks.values()) due = Math.min(task.due, due);
-    this.timer = setTimeout(() => { void this.drain(); }, Math.max(0, due - Date.now()));
+    this.timer = scheduleTimer(() => { void this.drain(); }, Math.max(0, due - Date.now()));
   }
 
   async settle(): Promise<void> {
@@ -218,7 +219,7 @@ export class Tracker {
   private async process(force: boolean): Promise<void> {
     if (this.closed || this.scanning || this.busy) return;
     this.busy = true;
-    clearTimeout(this.timer);
+    cancelTimer(this.timer);
     const generation = this.generation;
     let dirty = false, start = performance.now();
     const now = Date.now();
@@ -260,8 +261,8 @@ export class Tracker {
     this.closed = true;
     this.tasks.clear();
     this.drafts.clear();
-    clearTimeout(this.timer);
-    clearTimeout(this.draftTimer);
+    cancelTimer(this.timer);
+    cancelTimer(this.draftTimer);
   }
 
   reset(activity: Activity): void {

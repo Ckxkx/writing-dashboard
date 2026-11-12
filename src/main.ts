@@ -45,6 +45,8 @@ export default class WritingDashboard extends Plugin {
     }
     const { vault, workspace } = this.app;
     this.tracker = new Tracker(new Activity(data), {
+      // Vault totals and the initial index need the Markdown note list.
+      // Tracker applies path exclusions before reading individual notes.
       list: () => vault.getMarkdownFiles().map(file => file.path),
       exists: path => vault.getAbstractFileByPath(path) instanceof TFile,
       stat: path => {
@@ -78,7 +80,7 @@ export default class WritingDashboard extends Plugin {
 
     this.registerView(VIEW, leaf => new DashboardView(leaf, this));
     this.addRibbonIcon("chart-no-axes-combined", "Writing Dashboard", () => this.show());
-    this.addCommand({ id: "open", name: "Open Writing Dashboard", callback: () => this.show() });
+    this.addCommand({ id: "open", name: "Open dashboard", callback: () => this.show() });
     this.addCommand({ id: "build-statistics", name: "重建写作索引", callback: () => {
       this.show();
       this.buildStatistics();

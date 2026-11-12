@@ -8,7 +8,7 @@ md.inline.ruler.before("link", "obsidian_wiki", (state, silent) => {
   if (!embed && !state.src.startsWith("[[", at)) return false;
   const start = at + (embed ? 3 : 2);
   // Bound this lookup, including for long malformed runs of opening brackets.
-  const match = /^([^\[\]\n]{1,2048})\]\]/.exec(state.src.slice(start, start + 2050));
+  const match = /^([^[\]\n]{1,2048})\]\]/.exec(state.src.slice(start, start + 2050));
   if (!match) return false;
   if (!silent) {
     const [target, ...alias] = match[1].split("|");

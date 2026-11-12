@@ -57,6 +57,17 @@ function fixture(initial: Record<string, string> = {}, first = "2026-12-31") {
   return { a, files, tracker, reads: () => reads, lists: () => lists, day: (key: string) => { today = key; } };
 }
 
+test("persisted records are checked and invalid settings fall back to defaults", () => {
+  const original = fresh();
+  const loaded = load({ ...original, settings: { frontmatter: true, thresholds: [10, 4, 3], folders: [42] } });
+  assert.equal(loaded.settings.frontmatter, true);
+  assert.deepEqual(loaded.settings.thresholds, defaults.thresholds);
+  assert.deepEqual(loaded.settings.folders, defaults.folders);
+  assert.equal(Object.getPrototypeOf(loaded.files), null);
+  assert.throws(() => load({ ...original, files: { "bad.md": { id: 1, count: "123" } } }));
+  assert.throws(() => load({ ...original, days: { "2026-11-12": { notes: { "1": { added: 4 } } } } }));
+});
+
 test("first scan and restart refresh totals without inventing history", async () => {
   const { a, files, tracker } = fixture({ "existing.md": "已有 old" });
   await tracker.baseline();
