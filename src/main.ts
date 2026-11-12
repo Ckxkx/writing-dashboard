@@ -10,12 +10,14 @@ import { timelineDay } from "./history";
 
 const formatter = new Intl.NumberFormat("zh-CN");
 
-function markdownPaths(file: TAbstractFile): string[] {
-  if (file instanceof TFile) return file.extension.toLowerCase() === "md" ? [file.path] : [];
-  const result: string[] = [], stack = file instanceof TFolder ? [...file.children] : [];
+function selectedMarkdownPaths(entries: readonly TAbstractFile[], settings: Settings): string[] {
+  const result: string[] = [], stack = [...entries];
   while (stack.length) {
     const child = stack.pop()!;
-    if (child instanceof TFolder) for (const item of child.children) stack.push(item);
+    if (child instanceof TFolder && !child.isRoot() &&
+        !settings.folders.some(folder => child.path === folder || child.path.startsWith(folder + "/"))) {
+      for (const item of child.children) stack.push(item);
+    }
     else if (child instanceof TFile && child.extension.toLowerCase() === "md") result.push(child.path);
   }
   return result;
@@ -45,9 +47,10 @@ export default class WritingDashboard extends Plugin {
     }
     const { vault, workspace } = this.app;
     this.tracker = new Tracker(new Activity(data), {
-      // Vault totals and the initial index need the Markdown note list.
-      // Tracker applies path exclusions before reading individual notes.
-      list: () => vault.getMarkdownFiles().map(file => file.path),
+      listImports: paths => selectedMarkdownPaths(paths.flatMap(path => {
+        const entry = vault.getAbstractFileByPath(path);
+        return entry ? [entry] : [];
+      }), this.data.settings),
       exists: path => vault.getAbstractFileByPath(path) instanceof TFile,
       stat: path => {
         const file = vault.getAbstractFileByPath(path);
@@ -94,6 +97,10 @@ export default class WritingDashboard extends Plugin {
       if (this.stopped) return;
       workspace.detachLeavesOfType("writing-dashboard");
       void this.prepareSideLeaf().catch(error => console.error("Writing Dashboard", error));
+      const watch = (file: TFile | null) => {
+        if (file?.extension.toLowerCase() === "md") this.tracker.watch(file.path);
+      };
+      this.registerEvent(workspace.on("file-open", watch));
       this.registerEvent(workspace.on("editor-change", (editor, info) => {
         if (info.file?.extension.toLowerCase() === "md") this.tracker.edit(info.file.path, editor.getValue());
       }));
@@ -104,10 +111,11 @@ export default class WritingDashboard extends Plugin {
         if (file instanceof TFile) this.tracker.enqueue(file.path);
       }));
       this.registerEvent(vault.on("rename", (file, old) => {
-        this.tracker.move(old, file.path, markdownPaths(file), file instanceof TFolder);
+        this.tracker.move(old, file.path, file instanceof TFolder);
       }));
       this.registerEvent(vault.on("delete", file => this.tracker.remove(file.path, file instanceof TFolder)));
       void this.tracker.baseline(this.data.history?.indexVersion !== INDEX_VERSION);
+      watch(workspace.getActiveFile());
     });
     this.registerEvent(workspace.on("quit", tasks => {
       tasks.addPromise(this.tracker.settle().then(() => this.store.flush()));
@@ -181,6 +189,8 @@ export default class WritingDashboard extends Plugin {
 
   reset(): void {
     const data = fresh(this.data.settings);
+    data.nextId = this.data.nextId;
+    Object.assign(data.files, this.data.files);
     data.history = { indexVersion: INDEX_VERSION, days: {} };
     this.tracker.reset(new Activity(data));
     void this.tracker.baseline();
@@ -193,7 +203,7 @@ export default class WritingDashboard extends Plugin {
     this.building = this.configuring = this.configuring.then(async () => {
       await this.tracker.settle();
       if (this.stopped) return;
-      await this.tracker.baseline(true);
+      await this.tracker.baseline(true, this.data.settings.importPaths);
       if (this.stopped) return;
       new Notice("Writing Dashboard：已重建写作索引。");
     }).catch(error => {

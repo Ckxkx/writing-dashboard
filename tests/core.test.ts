@@ -1,15 +1,24 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { test } from "node:test";
+import { clearTimeout as clearNodeTimer, setTimeout as setNodeTimer } from "node:timers";
 import { setTimeout as delay } from "node:timers/promises";
 import { Activity } from "../src/activity";
 import { calendar, dateKey, localDate } from "../src/dates";
 import { indexDate, indexedDays, timelineDates, timelineDay, timelineYear } from "../src/history";
-import { defaults, fresh, included, load } from "../src/model";
+import { defaults, fresh, importPath, included, load } from "../src/model";
 import { summarize, tally } from "../src/statistics";
 import { Storage } from "../src/storage";
 import { Tracker } from "../src/tracker";
 import { countable, difference, MAX_SOURCE } from "../src/words";
+
+Object.defineProperty(global, "window", {
+  configurable: true,
+  value: {
+    setTimeout: (callback: () => void, delay: number) => Number(setNodeTimer(callback, delay)),
+    clearTimeout: clearNodeTimer,
+  },
+});
 
 test("counts Han characters, English words, and contiguous numbers", () => {
   assert.deepEqual(countable("中文hello42世界 don't l’été cafe\u0301𠀀", defaults),
@@ -50,7 +59,7 @@ function fixture(initial: Record<string, string> = {}, first = "2026-12-31") {
   let reads = 0, lists = 0, today = first;
   const a = new Activity(fresh());
   const tracker = new Tracker(a, {
-    list: () => { lists++; return [...files.keys()]; },
+    listImports: () => { lists++; return [...files.keys()]; },
     read: async path => { reads++; return files.get(path) ?? null; },
     exists: path => files.has(path),
   }, () => {}, () => today);
@@ -70,7 +79,7 @@ test("persisted records are checked and invalid settings fall back to defaults",
 
 test("first scan and restart refresh totals without inventing history", async () => {
   const { a, files, tracker } = fixture({ "existing.md": "已有 old" });
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   assert.equal(a.total, 3);
   assert.deepEqual(a.data.days, {});
   const id = a.data.files["existing.md"].id;
@@ -81,6 +90,56 @@ test("first scan and restart refresh totals without inventing history", async ()
   assert.equal(tracker.activity.data.files["existing.md"].id, id);
   assert.deepEqual(tracker.activity.data.days, {});
   tracker.stop();
+});
+
+test("startup refreshes only known notes and historical import respects explicit scopes and exclusions", async () => {
+  const a = new Activity(fresh({ ...defaults, folders: ["Journal/Private"] }));
+  a.observe("known.md", "known");
+  const files = new Map([
+    ["known.md", "known update"], ["Journal/day.md", "journal"],
+    ["Journal/Private/secret.md", "excluded"], ["Journalish/other.md", "outside"],
+  ]);
+  const lookups: string[][] = [], reads: string[] = [];
+  const tracker = new Tracker(a, {
+    listImports: roots => { lookups.push([...roots]); return [...files.keys()]; },
+    exists: path => files.has(path),
+    read: async path => { reads.push(path); return files.get(path) ?? null; },
+    stat: () => ({ ctime: +localDate("2026-11-11") }),
+  }, () => {}, () => "2026-11-12");
+  try {
+    await tracker.baseline(true);
+    assert.deepEqual(reads, ["known.md"]);
+    assert.deepEqual(lookups, []);
+    await tracker.baseline(true, ["/", ".", "../", "Journal/"]);
+    assert.deepEqual(lookups, [["Journal"]]);
+    assert.deepEqual(reads, ["known.md", "known.md", "Journal/day.md"]);
+    assert.deepEqual(Object.keys(a.data.files).sort(), ["Journal/day.md", "known.md"]);
+    assert.equal(importPath("C:\\Notes"), undefined);
+    assert.equal(importPath("Notes/../"), undefined);
+    assert.equal(importPath("Notes\\Draft.md"), "Notes/Draft.md");
+    assert.equal(timelineDay(a.data, "2026-11-11").words, 3);
+  } finally {
+    tracker.stop();
+  }
+});
+
+test("an opened unindexed note uses its prior body to measure the first edit", async () => {
+  const { a, tracker, files, reads, lists } = fixture({ "old.md": "old note" });
+  try {
+    await tracker.baseline(true);
+    assert.equal(a.fileCount, 0);
+    tracker.watch("old.md");
+    tracker.edit("old.md", "old note changed");
+    files.set("old.md", "old note changed");
+    tracker.enqueue("old.md");
+    await tracker.settle();
+    assert.equal(lists(), 0);
+    assert.equal(reads(), 2);
+    assert.equal(tally(a.data.days["2026-12-31"]).added, 1);
+    assert.equal(a.total, 3);
+  } finally {
+    tracker.stop();
+  }
 });
 
 test("index dates prefer creation time and only fall back to a valid YAML created property", () => {
@@ -104,10 +163,10 @@ test("index migration fixes earlier dates and merges recorded edits without dupl
   const files = new Map([[path, "old title"], [namedToday, "index body"]]);
   
   const tracker = new Tracker(a, {
-    list: () => [...files.keys()], exists: path => files.has(path),
+    listImports: () => [...files.keys()], exists: path => files.has(path),
     read: async path => files.get(path) ?? null, stat: path => ({ ctime: +localDate(path.startsWith(earlier) ? earlier : today) }),
   }, () => {}, () => today);
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   a.data.history = { indexVersion: 2, days: { "2026-11-11": { "1": { path, words: 2 } } } };
   assert.equal(indexedDays(a.data), undefined);
   await tracker.baseline(true);
@@ -134,7 +193,7 @@ test("index migration fixes earlier dates and merges recorded edits without dupl
 
 test("debounces repeats, tracks edits across midnight and keeps unchanged saves out", async () => {
   const { a, tracker, files, reads, day } = fixture();
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   files.set("Note.md", "first hello");
   tracker.enqueue("Note.md", true);
   for (let i = 0; i < 20; i++) tracker.enqueue("Note.md");
@@ -163,11 +222,11 @@ test("editing yesterday's note updates today before save and is counted once aft
   const path = "notes.md", files = new Map([[path, "昨日正文"]]);
   const activity = new Activity(fresh());
   const tracker = new Tracker(activity, {
-    list: () => [...files.keys()], exists: path => files.has(path),
+    listImports: () => [...files.keys()], exists: path => files.has(path),
     read: async path => files.get(path) ?? null, stat: () => ({ ctime: +localDate(yesterday) }),
   }, () => {}, () => today);
   try {
-    await tracker.baseline(true);
+    await tracker.baseline(true, [path]);
     tracker.edit(path, "昨日正文\n今日新稿");
     await delay(125);
     assert.equal(timelineDay(activity.data, yesterday).words, 4);
@@ -207,7 +266,7 @@ test("editing yesterday's note updates today before save and is counted once aft
 test("an autosave after midnight keeps the editor snapshot on the day it was typed", async () => {
   const { a, tracker, files, day } = fixture({ "notes.md": "先前" }, "2026-11-12");
   try {
-    await tracker.baseline();
+    await tracker.baseline(false, [...files.keys()]);
     tracker.edit("notes.md", "先前新增");
     day("2026-11-13");
     files.set("notes.md", "先前新增");
@@ -226,12 +285,12 @@ test("a save queued while rebuilding keeps both its original index and today's r
   let source = "原文", release: (() => void) | undefined, wait: Promise<void> | undefined;
   const a = new Activity(fresh());
   const tracker = new Tracker(a, {
-    list: () => ["old.md"], exists: () => true,
+    listImports: () => ["old.md"], exists: () => true,
     read: async () => { await wait; return source; },
     stat: () => ({ ctime: +localDate(yesterday) }),
   }, () => {}, () => today);
   try {
-    await tracker.baseline(true);
+    await tracker.baseline(true, ["old.md"]);
     wait = new Promise<void>(resolve => { release = resolve; });
     const scan = tracker.baseline(true);
     source = "原文新增";
@@ -249,7 +308,7 @@ test("a save queued while rebuilding keeps both its original index and today's r
 
 test("a batch with unresolved versions on both sides of midnight is flagged", async () => {
   const { a, tracker, files, day } = fixture({ "n.md": "original" });
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   files.set("n.md", "original late");
   tracker.enqueue("n.md");
   day("2027-01-01");
@@ -264,16 +323,16 @@ test("a batch with unresolved versions on both sides of midnight is flagged", as
 
 test("queued edits survive file renames and folder moves, and deleted identities are not reused", async () => {
   const { a, files, tracker } = fixture({ "old/n.md": "one", "older/n.md": "unrelated" });
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   const id = a.data.files["old/n.md"].id;
   files.set("old/n.md", "one two");
   tracker.enqueue("old/n.md");
   files.delete("old/n.md");
   files.set("old/name.md", "one two");
-  tracker.move("old/n.md", "old/name.md", ["old/name.md"]);
+  tracker.move("old/n.md", "old/name.md");
   files.delete("old/name.md");
   files.set("moved/name.md", "one two");
-  tracker.move("old", "moved", ["moved/name.md"], true);
+  tracker.move("old", "moved", true);
   await tracker.settle();
   assert.equal(a.pathFor(id), "moved/name.md");
   assert.equal(tally(a.data.days["2026-12-31"]).added, 1);
@@ -293,7 +352,7 @@ test("excluded paths are segment aware and pause updates only the baseline", asy
   const { a, files, tracker } = fixture({ "a.md": "one" });
   assert.equal(included("Folderish/n.md", { ...defaults, folders: ["Folder"] }), true);
   assert.equal(included("Folder/n.md", { ...defaults, folders: ["Folder"] }), false);
-  await tracker.baseline();
+  await tracker.baseline(false, [...files.keys()]);
   a.data.settings.tracking = false;
   files.set("a.md", "one two");
   tracker.enqueue("a.md");
@@ -311,7 +370,7 @@ test("handles empty and large vaults; a single edit reads one file and never lis
   empty.tracker.stop();
 
   const big = fixture(Object.fromEntries(Array.from({ length: 8000 }, (_, n) => [`Notes/${n}.md`, "Existing 中文"])));
-  await big.tracker.baseline();
+  await big.tracker.baseline(false, ["Notes"]);
   assert.equal(big.a.total, 24000);
   assert.deepEqual(big.a.data.days, {});
   big.files.set("Notes/42.md", "Existing 中文 new");

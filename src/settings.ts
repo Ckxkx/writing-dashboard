@@ -1,6 +1,12 @@
-import { App, Modal, normalizePath, Notice, PluginSettingTab, Setting, type SettingDefinitionItem } from "obsidian";
+import { App, Modal, normalizePath, Notice, PluginSettingTab, Setting, TFile, TFolder, type ButtonComponent, type SettingDefinitionItem } from "obsidian";
 import type WritingDashboard from "./main";
-import type { Settings } from "./model";
+import { importPath, type Settings } from "./model";
+
+function destructive(button: ButtonComponent): ButtonComponent {
+  if (typeof button.setDestructive === "function") return button.setDestructive();
+  button.buttonEl.addClass("mod-warning");
+  return button;
+}
 
 class ResetModal extends Modal {
   constructor(app: App, private readonly reset: () => void) { super(app); }
@@ -9,7 +15,7 @@ class ResetModal extends Modal {
     this.contentEl.createEl("p", { text: "这会清空写作记录和索引，并重新扫描当前字数。你的笔记不会改变。此操作无法撤销。" });
     new Setting(this.contentEl)
       .addButton(button => button.setButtonText("取消").onClick(() => this.close()))
-      .addButton(button => button.setButtonText("清空统计").setWarning().onClick(() => {
+      .addButton(button => destructive(button.setButtonText("清空统计")).onClick(() => {
         this.reset();
         this.close();
       }));
@@ -67,6 +73,31 @@ export class DashboardSettings extends PluginSettingTab {
           toggle("codeBlocks", "统计代码块", "计入围栏和缩进代码块中的内容。行内代码不计入。", true),
           paths("folders", "排除文件夹", "Templates\nArchive/Imported"),
           paths("paths", "排除文件", "Inbox.md"),
+          {
+            name: "补录旧笔记", desc: "每行一个要导入的笔记或文件夹路径。只扫描这些路径，不接受 Vault 根目录。",
+            render: setting => {
+              let value = plugin.data.settings.importPaths.join("\n");
+              setting.addTextArea(text => text.setPlaceholder("日记\n草稿/旧稿.md").setValue(value)
+                .onChange(next => { value = next; }))
+                .addButton(button => button.setButtonText("保存并重建").onClick(() => {
+                  const requested = value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+                  const imports: string[] = [];
+                  for (const line of requested) {
+                    const path = importPath(line);
+                    const entry = path && plugin.app.vault.getAbstractFileByPath(path);
+                    const valid = entry instanceof TFolder && !entry.isRoot() ||
+                      entry instanceof TFile && entry.extension.toLowerCase() === "md";
+                    if (!path || !valid) {
+                      new Notice("请填写有效的 Markdown 笔记或文件夹路径，不能选择 Vault 根目录：" + line);
+                      return;
+                    }
+                    imports.push(path);
+                  }
+                  plugin.update({ importPaths: [...new Set(imports)] });
+                  plugin.buildStatistics();
+                }));
+            },
+          },
         ],
       },
       {
@@ -110,7 +141,7 @@ export class DashboardSettings extends PluginSettingTab {
           {
             name: "重置统计", desc: "清空写作记录和索引，并重新建立基线。设置和笔记会保留。",
             render: setting => {
-              setting.addButton(button => button.setButtonText("重置统计…").setWarning()
+              setting.addButton(button => destructive(button.setButtonText("重置统计…"))
                 .onClick(() => new ResetModal(this.app, () => plugin.reset()).open()));
             },
           },

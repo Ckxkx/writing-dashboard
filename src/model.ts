@@ -4,6 +4,7 @@ export interface Settings {
   codeBlocks: boolean;
   folders: string[];
   paths: string[];
+  importPaths: string[];
   dateFormat: string;
   tracking: boolean;
   monthly: boolean;
@@ -11,7 +12,7 @@ export interface Settings {
 
 export const defaults: Settings = {
   thresholds: [200, 500, 1000], frontmatter: false, codeBlocks: false,
-  folders: [], paths: [], dateFormat: "YYYY年M月D日", tracking: true,
+  folders: [], paths: [], importPaths: [], dateFormat: "YYYY年M月D日", tracking: true,
   monthly: true,
 };
 
@@ -52,8 +53,9 @@ const whole = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value);
 const count = (value: unknown): value is number => whole(value) && value >= 0;
 const id = (value: unknown): value is number => count(value) && value > 0;
+const unknownArray = (value: unknown): value is unknown[] => Array.isArray(value);
 const strings = (value: unknown): value is string[] =>
-  Array.isArray(value) && value.every((item: unknown) => typeof item === "string");
+  unknownArray(value) && value.every(item => typeof item === "string");
 const date = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(key);
 
 function readSettings(value: Record<string, unknown>): Settings {
@@ -62,15 +64,16 @@ function readSettings(value: Record<string, unknown>): Settings {
     const option = value[key];
     if (typeof option === "boolean") s[key] = option;
   }
-  for (const key of ["folders", "paths"] as const) {
+  for (const key of ["folders", "paths", "importPaths"] as const) {
     const option = value[key];
     if (strings(option)) s[key] = option;
   }
   if (typeof value.dateFormat === "string" && value.dateFormat.trim() && value.dateFormat.length <= 80) {
     s.dateFormat = value.dateFormat;
   }
-  if (Array.isArray(value.thresholds) && value.thresholds.length === 3) {
-    const [low, middle, high]: unknown[] = value.thresholds;
+  const thresholds = value.thresholds;
+  if (unknownArray(thresholds) && thresholds.length === 3) {
+    const [low, middle, high] = thresholds;
     if (id(low) && id(middle) && id(high) && low > 1 && low < middle && middle < high) {
       s.thresholds = [low, middle, high];
     }
@@ -115,4 +118,13 @@ export function load(raw: unknown): Data {
 export function included(path: string, settings: Settings): boolean {
   return /\.md$/i.test(path) && !settings.paths.includes(path) &&
     !settings.folders.some(folder => path.startsWith(folder + "/"));
+}
+
+/** Resolve an explicit note/folder selection. Empty, absolute and root paths are not import scopes. */
+export function importPath(value: string): string | undefined {
+  const path = value.trim().replace(/\\/g, "/").replace(/\/+$/g, "");
+  if (!path || path.startsWith("/") || /^[a-z]:/i.test(path)) return;
+  const segments = path.split("/");
+  if (segments.some(segment => !segment || segment === "." || segment === "..")) return;
+  return path;
 }

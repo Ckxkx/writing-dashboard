@@ -23,7 +23,7 @@ Writing Dashboard is a local writing statistics plugin for Obsidian. It shows a 
 | Writing heatmap | Opens on today. Hover over a date for statistics, then click it to see and open its notes. Keyboard navigation is supported. |
 | Monthly trends | Compare the word counts recorded for each month of the selected year. |
 | Live statistics | Preview changes as you type; Obsidian confirms them on save. The desktop status bar shows today's note and word counts and toggles the dashboard. |
-| Local index | Rebuild the index, exclude files or folders, change the counting rules, or pause tracking. |
+| Local index | Import selected Markdown files or folders, exclude paths, change the counting rules, or pause tracking. |
 
 ## Installation
 
@@ -39,7 +39,7 @@ To upgrade, replace all three files together and keep data.json. You do not need
 
 1. Click the ribbon icon or the desktop status-bar count, or run **Writing Dashboard: Open dashboard**. Click the status bar again to close the open dashboard.
 2. Choose a year or select a date to see its notes. Scroll the heatmap left for earlier dates; use the Today button (`今天` in the screenshots) to return.
-3. If notes are missing, choose **Rebuild index** (`重建索引`) from the **···** menu. Rebuilding preserves recorded writing activity.
+3. To import older notes, open the plugin settings and enter individual Markdown paths or folders under **补录旧笔记** (Import older notes), one per line. Choose **保存并重建** (Save and rebuild). The Vault root is not an import target. **··· → Rebuild index** refreshes known notes and these saved selections.
 
 <details>
 <summary>View the full dashboard</summary>
@@ -58,7 +58,7 @@ To upgrade, replace all three files together and keep data.json. You do not need
 
 ## Data and privacy
 
-Writing Dashboard runs locally and does not send notes, statistics, or telemetry. Vault totals and index builds enumerate Markdown note paths. Path exclusions are applied before reading note bodies; the plugin does not read non-Markdown files for statistics. Settings and statistics are stored in your vault's `.obsidian/plugins/writing-dashboard/data.json`. This file contains note paths and counts, but no note bodies. Quit Obsidian before backing it up. The plugin does not merge statistics written concurrently by multiple devices.
+Writing Dashboard runs locally and does not send notes, statistics, or telemetry. Startup refreshes only notes already known to the plugin. It also tracks Markdown notes you open, create, or edit. A manual import scans only the Markdown files or folders you select, and skips excluded paths. The totals cover those known and imported notes. Upgrading preserves existing statistics. Settings and statistics are stored in your vault's `.obsidian/plugins/writing-dashboard/data.json`. This file contains note paths and counts, but no note bodies. Quit Obsidian before backing it up. The plugin does not merge statistics written concurrently by multiple devices.
 
 ## Development
 

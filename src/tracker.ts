@@ -2,11 +2,11 @@ import { cancelTimer, scheduleTimer, type Timer } from "./timers";
 import { Activity } from "./activity";
 import { dateKey } from "./dates";
 import { indexDate, recordedNet } from "./history";
-import { included, INDEX_VERSION, type Day, type History } from "./model";
+import { importPath, included, INDEX_VERSION, type Day, type History } from "./model";
 import { MAX_SOURCE, sameText } from "./words";
 
 export interface VaultSource {
-  list(): string[];
+  listImports(paths: readonly string[]): string[];
   read(path: string): Promise<string | null>;
   exists(path: string): boolean;
   stat?(path: string): { ctime: number } | undefined;
@@ -20,6 +20,7 @@ const under = (path: string, root: string) => path === root || path.startsWith(r
 export class Tracker {
   private tasks = new Map<string, Task>();
   private drafts = new Map<string, Draft>();
+  private watches = new Map<string, Promise<void>>();
   private draftTimer?: Timer;
   liveDays: Record<string, Day> = {};
   liveNet = 0;
@@ -33,12 +34,16 @@ export class Tracker {
   constructor(public activity: Activity, private readonly vault: VaultSource,
     private readonly changed: (persist: boolean) => void, private readonly localDay = dateKey) {}
 
-  async baseline(buildIndex = false): Promise<void> {
+  async baseline(buildIndex = false, selections: readonly string[] = []): Promise<void> {
     const generation = ++this.generation;
     this.scanning = true;
     this.changed(false);
-    const paths = this.vault.list().filter(path => included(path, this.activity.data.settings));
     const { data } = this.activity;
+    const roots = selections.map(importPath).filter((path): path is string => path !== undefined);
+    const imports = roots.length
+      ? this.vault.listImports(roots).filter(path => roots.some(root => under(path, root))) : [];
+    const paths = [...new Set([...Object.keys(data.files), ...imports])]
+      .filter(path => included(path, data.settings) && this.vault.exists(path));
     const today = this.localDay();
     const history: History | undefined = buildIndex ? { indexVersion: INDEX_VERSION, days: {} } : undefined;
     const net = history ? recordedNet(data) : undefined;
@@ -90,6 +95,28 @@ export class Tracker {
     this.schedule();
   }
 
+  watch(path: string): void {
+    const { activity } = this;
+    if (this.closed || !included(path, activity.data.settings) || this.watches.has(path) ||
+      this.tasks.get(path)?.created || activity.hasSnapshot(path)) return;
+    const id = activity.data.files[path]?.id;
+    const pending = this.vault.read(path).then(source => {
+      if (source === null || this.closed || this.activity !== activity || this.watches.get(path) !== pending ||
+        activity.data.files[path]?.id !== id || this.tasks.get(path)?.created ||
+        !included(path, activity.data.settings) || !this.vault.exists(path)) return;
+      if (id === undefined) {
+        activity.observe(path, source);
+        this.changed(true);
+      } else {
+        activity.prime(path, source);
+      }
+      this.refreshDrafts();
+    }).finally(() => {
+      if (this.watches.get(path) === pending) this.watches.delete(path);
+    });
+    this.watches.set(path, pending);
+  }
+
   edit(path: string, source: string, day = this.localDay()): void {
     if (this.closed || !included(path, this.activity.data.settings)) return;
     const old = this.drafts.get(path);
@@ -99,17 +126,7 @@ export class Tracker {
     }
     const draft = { source, day, mixed: !!old && (old.mixed || old.day !== day) };
     this.drafts.set(path, draft);
-    const id = this.activity.data.files[path]?.id;
-    if (!old && id !== undefined && !this.activity.hasSnapshot(path)) {
-      const activity = this.activity;
-      void this.vault.read(path).then(saved => {
-        if (saved !== null && !this.closed && this.activity === activity &&
-          activity.data.files[path]?.id === id && this.drafts.has(path)) {
-          activity.prime(path, saved);
-          this.refreshDrafts();
-        }
-      });
-    }
+    if (!old) this.watch(path);
     // Throttle parsing, including during continuous typing.
     this.draftTimer ??= scheduleTimer(() => this.refreshDrafts(), 90);
   }
@@ -149,9 +166,10 @@ export class Tracker {
     this.schedule();
   }
 
-  move(from: string, to: string, children: string[], folder = false): void {
+  move(from: string, to: string, folder = false): void {
     const paths = folder
-      ? new Set([...Object.keys(this.activity.data.files), ...this.tasks.keys(), ...this.drafts.keys()].filter(path => under(path, from)))
+      ? new Set([...Object.keys(this.activity.data.files), ...this.tasks.keys(), ...this.drafts.keys(),
+        ...this.watches.keys()].filter(path => under(path, from)))
       : [from];
     for (const path of paths) {
       const target = to + path.slice(from.length);
@@ -159,14 +177,10 @@ export class Tracker {
       const draft = this.drafts.get(path);
       this.tasks.delete(path);
       this.drafts.delete(path);
+      this.watches.delete(path);
       this.activity.move(path, target);
       if (pending && included(target, this.activity.data.settings)) this.tasks.set(target, { ...pending });
       if (draft && included(target, this.activity.data.settings)) this.drafts.set(target, draft);
-    }
-    for (const path of children) {
-      if ((this.scanning || !this.activity.data.files[path]) && !this.tasks.has(path)) {
-        this.enqueue(path, false, this.localDay(), true);
-      }
     }
     this.refreshDrafts();
     this.changed(true);
@@ -175,7 +189,8 @@ export class Tracker {
 
   remove(root: string, folder = false, day = this.localDay()): void {
     const paths = folder
-      ? new Set([...Object.keys(this.activity.data.files), ...this.tasks.keys(), ...this.drafts.keys()].filter(path => under(path, root)))
+      ? new Set([...Object.keys(this.activity.data.files), ...this.tasks.keys(), ...this.drafts.keys(),
+        ...this.watches.keys()].filter(path => under(path, root)))
       : [root];
     const track = !this.scanning && this.activity.data.settings.tracking;
     let dirty = false;
@@ -183,6 +198,7 @@ export class Tracker {
       const task = this.tasks.get(path);
       this.tasks.delete(path);
       this.drafts.delete(path);
+      this.watches.delete(path);
       if (task?.created && !task.silent && track && !this.activity.data.files[path]) {
         this.activity.observe(path, null, { day: task.day, created: true, mixed: task.mixed });
         this.activity.remove(path);
@@ -227,6 +243,9 @@ export class Tracker {
       for (const [path, task] of [...this.tasks]) {
         if (!force && task.due > now) continue;
         if (this.tasks.get(path) !== task) continue;
+        if (this.watches.has(path)) await this.watches.get(path);
+        if (this.closed || generation !== this.generation) break;
+        if (this.tasks.get(path) !== task) continue;
         const source = await this.vault.read(path);
         if (this.closed || generation !== this.generation) break;
         if (this.tasks.get(path) !== task) continue;
@@ -261,6 +280,7 @@ export class Tracker {
     this.closed = true;
     this.tasks.clear();
     this.drafts.clear();
+    this.watches.clear();
     cancelTimer(this.timer);
     cancelTimer(this.draftTimer);
   }
@@ -269,6 +289,7 @@ export class Tracker {
     this.activity = activity;
     this.tasks.clear();
     this.drafts.clear();
+    this.watches.clear();
     this.refreshDrafts();
   }
 }
