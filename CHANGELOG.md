@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.6]
+
+- Fixed the reset buttons' API compatibility with Obsidian 1.8.7. Both buttons retain destructive styling and clearing statistics still requires confirmation.
+
+Update all three plugin files together and keep data.json.
+
 ## [0.3.5]
 
 - Removed automatic Vault-wide enumeration. Startup refreshes known notes and activity follows the notes you open, create, or edit.
@@ -27,6 +33,7 @@ Install or update by placing main.js, manifest.json and styles.css in the same p
 - 提供本地笔记索引、Markdown 计数设置、路径排除及重建索引功能。
 
 支持 Obsidian 1.8.7 或更新版本。首次安装请下载 ZIP 解压；从本地开发版升级时，覆盖插件文件并保留 `data.json`。
+
 
 
 

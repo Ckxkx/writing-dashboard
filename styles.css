@@ -152,6 +152,7 @@ button.wd-status-button, .status-bar .status-bar-item button.wd-status-button {
   cursor: pointer;
 }
 .wd-status-button:hover { color: var(--text-normal); }
+.setting-item-control button.wd-destructive { color: var(--text-error); }
 .wd-cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 168px), 1fr));

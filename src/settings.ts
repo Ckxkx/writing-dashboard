@@ -3,9 +3,7 @@ import type WritingDashboard from "./main";
 import { importPath, type Settings } from "./model";
 
 function destructive(button: ButtonComponent): ButtonComponent {
-  if (typeof button.setDestructive === "function") return button.setDestructive();
-  button.buttonEl.addClass("mod-warning");
-  return button;
+  return button.setClass("wd-destructive");
 }
 
 class ResetModal extends Modal {
