@@ -4,6 +4,7 @@ import { test } from "node:test";
 import { clearTimeout as clearNodeTimer, setTimeout as setNodeTimer } from "node:timers";
 import { setTimeout as delay } from "node:timers/promises";
 import { Activity } from "../src/activity";
+import { addCreatedIfMissing, NewNoteDates } from "../src/creation";
 import { calendar, dateKey, localDate } from "../src/dates";
 import { indexDate, indexedDays, timelineDates, timelineDay, timelineYear } from "../src/history";
 import { defaults, fresh, importPath, included, load } from "../src/model";
@@ -158,18 +159,74 @@ test("an opened unindexed note uses its prior body to measure the first edit", a
   }
 });
 
-test("index dates prefer creation time and only fall back to a valid YAML created property", () => {
+test("a valid created property produces the same index date across devices", () => {
   const today = "2026-11-12";
   const source = '---\r\ncreated: "2024-02-29T01:00:00+08:00"\r\n---\r\n正文';
   const stat = { ctime: +localDate("2026-11-11"), mtime: +localDate("2026-11-08") };
-  assert.deepEqual(indexDate(source, stat, today), { day: "2026-11-11", source: "filetime" });
+  assert.deepEqual(indexDate(source, stat, today), { day: "2024-02-29", source: "frontmatter" });
+  assert.deepEqual(indexDate(source, { ctime: +localDate(today) }, today), indexDate(source, stat, today));
+  assert.deepEqual(indexDate(source, stat, today, false), { day: "2026-11-11", source: "filetime" });
   assert.deepEqual(indexDate(source, undefined, today), { day: "2024-02-29", source: "frontmatter" });
   assert.deepEqual(indexDate(source, { ctime: 0 }, today), { day: "2024-02-29", source: "frontmatter" });
   assert.deepEqual(indexDate(source, { ctime: +localDate("2026-11-13") }, today),
     { day: "2024-02-29", source: "frontmatter" });
   assert.equal(indexDate("---\ncreated: 2026-02-30\n---\n正文", undefined, today), undefined);
+  assert.deepEqual(indexDate("---\ncreated: 2026-02-30\n---\n正文", stat, today), { day: "2026-11-11", source: "filetime" });
+  assert.deepEqual(indexDate('---\ncreated: "[[2024-02-29]]"\n---\n正文', stat, today),
+    { day: "2024-02-29", source: "frontmatter" });
   assert.equal(indexDate("---\ndate: 2026-11-08\n---\n正文", { ...stat, ctime: NaN }, today), undefined);
   assert.equal(indexDate("created: 2026-11-08", undefined, today), undefined);
+});
+
+test("only a freshly opened candidate gets stamped and existing properties are preserved", () => {
+  const candidates = new NewNoteDates<object>();
+  const newFile = {}, receivedFile = {}, expired = {};
+  candidates.created(newFile, "2026-11-11", 0);
+  candidates.created(receivedFile, "2026-11-11", 0);
+  candidates.created(expired, "2026-11-11", 0);
+  candidates.opened(expired, 20_000);
+  assert.equal(candidates.pending(receivedFile), undefined);
+  assert.equal(candidates.pending(expired), undefined);
+  candidates.opened(newFile, 1);
+  assert.equal(candidates.pending(newFile), "2026-11-11");
+  const metadata = { tags: ["journal"] };
+  addCreatedIfMissing(metadata, candidates.pending(newFile)!);
+  assert.deepEqual(metadata, { tags: ["journal"], created: "2026-11-11" });
+  for (const existing of [{ created: "2025-01-01" }, { Created: null }]) {
+    const before = { ...existing };
+    addCreatedIfMissing(existing, "2026-11-11");
+    assert.deepEqual(existing, before);
+  }
+  assert.deepEqual(countable("---\ncreated: 2026-11-11\ntitle: Draft\n---\n正文",
+    { ...defaults, frontmatter: true }), ["title", "Draft", "正", "文"]);
+  candidates.done(newFile);
+  assert.equal(candidates.pending(newFile), undefined);
+});
+
+test("a note received with content keeps its original date and later local edits count today", async () => {
+  const today = "2026-11-12", original = "2026-11-01";
+  const path = "synced.md", received = "---\ncreated: 2026-11-01\n---\nold text";
+  const a = new Activity(fresh());
+  const files = new Map([[path, received]]);
+  const tracker = new Tracker(a, {
+    listImports: () => [], exists: path => files.has(path),
+    read: async path => files.get(path) ?? null, stat: () => ({ ctime: +localDate(today) }),
+  }, () => {}, () => today);
+  try {
+    await tracker.baseline(true);
+    tracker.arrive(path, false);
+    await tracker.settle();
+    assert.equal(timelineDay(a.data, original).words, 2);
+    assert.equal(timelineDay(a.data, today).words, 0);
+    files.set(path, received + " more");
+    tracker.enqueue(path);
+    await tracker.settle();
+    await tracker.baseline(true);
+    assert.equal(timelineDay(a.data, original).words, 2);
+    assert.equal(timelineDay(a.data, today).words, 1);
+  } finally {
+    tracker.stop();
+  }
 });
 
 test("index migration fixes earlier dates and merges recorded edits without duplicating words or notes", async () => {

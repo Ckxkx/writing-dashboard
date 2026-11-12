@@ -6,6 +6,8 @@ export interface Settings {
   paths: string[];
   importPaths: string[];
   dateFormat: string;
+  preferCreated: boolean;
+  autoCreated: boolean;
   tracking: boolean;
   monthly: boolean;
 }
@@ -13,7 +15,7 @@ export interface Settings {
 export const defaults: Settings = {
   thresholds: [200, 500, 1000], frontmatter: false, codeBlocks: false,
   folders: [], paths: [], importPaths: [], dateFormat: "YYYY年M月D日", tracking: true,
-  monthly: true,
+  monthly: true, preferCreated: true, autoCreated: true,
 };
 
 export interface FileBaseline { id: number; count: number | null }
@@ -28,7 +30,7 @@ export interface NoteActivity {
 export interface Day { notes: Record<string, NoteActivity> }
 export type DateSource = "frontmatter" | "filetime";
 export interface HistoricalNote { path: string; words: number; source?: DateSource }
-export const INDEX_VERSION = 3;
+export const INDEX_VERSION = 4;
 export interface History { indexVersion?: number; days: Record<string, Record<string, HistoricalNote>> }
 export interface Data {
   version: 1;
@@ -60,7 +62,7 @@ const date = (key: string) => /^\d{4}-\d{2}-\d{2}$/.test(key);
 
 function readSettings(value: Record<string, unknown>): Settings {
   const s = { ...defaults };
-  for (const key of ["frontmatter", "codeBlocks", "tracking", "monthly"] as const) {
+  for (const key of ["frontmatter", "codeBlocks", "tracking", "monthly", "preferCreated", "autoCreated"] as const) {
     const option = value[key];
     if (typeof option === "boolean") s[key] = option;
   }

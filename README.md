@@ -52,9 +52,15 @@ To upgrade, replace all three files together and keep data.json. You do not need
 
 - **Vault totals** reflect the number of included Markdown notes and the length of their current body text. Deleting text reduces the vault's word count.
 - **Daily and monthly counts** combine indexed text from existing notes with confirmed additions after the plugin is enabled. Indexed text uses the note's date; new additions use the local editing date. Each note counts once per day. A day with a positive word count counts as a writing day.
-- **Existing notes** use the file's creation time first and fall back to the YAML `created` field if the timestamp is missing, invalid, or in the future. If neither date works, the note still contributes to vault totals. The index cannot reconstruct what you actually wrote each day before installing the plugin.
-- Each Han character counts as one unit. Other words and continuous runs of digits count as one unit each. YAML, code blocks, inline code, images, and embeds are excluded by default. Settings can include YAML or code blocks; inline code remains excluded.
+- **Note dates** prefer a valid YAML created property by default, falling back to the local file creation time. You can restore file-time priority in settings. Rebuild the index after correcting a date on an already indexed note. If neither date works, the note still contributes to totals without a dated entry.
+- Each Han character counts as one unit. Other words and continuous runs of digits count as one unit each. YAML, code blocks, inline code, images, and embeds are excluded by default. Settings can include YAML or code blocks; inline code and the creation date remain excluded.
 - Preview counts are confirmed on save. Saving the same content twice does not count it twice. When only a positive net change can be confirmed, the dashboard shows that minimum and marks the change as partial. Deleting text does not subtract already confirmed additions from historical counts.
+
+## Creation dates across devices
+
+When you open a newly created blank Markdown note, the plugin adds a local calendar date as the created property by default. It preserves existing values and does not bulk-edit older notes or stamp notes arriving with content. For notes created from a non-empty Obsidian template, add created: "{{date:YYYY-MM-DD}}" to the template. Automatic stamping and date priority can be changed independently in settings.
+
+A valid created property follows the note when you sync it, so the indexed date does not depend on the device's filesystem timestamp. It does not sync daily editing history or import scopes.
 
 ## Data and privacy
 

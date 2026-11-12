@@ -42,7 +42,7 @@ export class DashboardSettings extends PluginSettingTab {
 
   private groups(): Group[] {
     const plugin = this.plugin;
-    const toggle = (key: "tracking" | "frontmatter" | "codeBlocks" | "monthly",
+    const toggle = (key: "tracking" | "frontmatter" | "codeBlocks" | "monthly" | "preferCreated" | "autoCreated",
       name: string, desc: string, rebaseline = false): Row => ({
       name, desc,
       render: setting => {
@@ -67,6 +67,8 @@ export class DashboardSettings extends PluginSettingTab {
       {
         type: "group", heading: "写作追踪", items: [
           toggle("tracking", "记录写作活动", "关闭后继续更新当前总字数，暂停记录每日活动。"),
+          toggle("preferCreated", "优先使用 created 日期", "用于笔记归档。缺少有效属性时使用本机文件创建时间。", true),
+          toggle("autoCreated", "新笔记自动填写 created", "打开刚新建的空白笔记时补写本地日期。不会覆盖已有属性或批量修改旧笔记。"),
           toggle("frontmatter", "统计 YAML Frontmatter", "计入 YAML 中可计数的键和值。修改后会重新建立字数基线。", true),
           toggle("codeBlocks", "统计代码块", "计入围栏和缩进代码块中的内容。行内代码不计入。", true),
           paths("folders", "排除文件夹", "Templates\nArchive/Imported"),

@@ -8,8 +8,19 @@ function validDay(day: string | undefined, today: string): day is string {
 
 const createdProperty = /^(?:created|"created"|'created'):[ \t]*(.*)$/im;
 
+export function createdDay(text: string, today: string): string | undefined {
+  const yaml = readFrontmatter(text);
+  if (!yaml) return;
+  const value = createdProperty.exec(yaml[1])?.[1].trim().replace(/^["']/, "");
+  const day = value && (/^\[\[(\d{4}-\d{2}-\d{2})\]\]/.exec(value)?.[1] ??
+    /^(\d{4}-\d{2}-\d{2})(?=$|[Tt "'#])/.exec(value)?.[1]);
+  if (validDay(day, today)) return day;
+}
+
 export function indexDate(text: string, stat: { ctime: number } | undefined,
-  today: string): { day: string; source: DateSource } | undefined {
+  today: string, preferCreated = true): { day: string; source: DateSource } | undefined {
+  const property = createdDay(text, today);
+  if (preferCreated && property) return { day: property, source: "frontmatter" };
   const time = stat?.ctime;
   if (time !== undefined && Number.isFinite(time) && time > 0) {
     const created = new Date(time);
@@ -20,11 +31,7 @@ export function indexDate(text: string, stat: { ctime: number } | undefined,
     }
   }
 
-  const yaml = readFrontmatter(text);
-  if (!yaml) return;
-  const value = createdProperty.exec(yaml[1])?.[1].trim().replace(/^["']/, "");
-  const day = value && /^(\d{4}-\d{2}-\d{2})(?=$|[Tt "'#])/.exec(value)?.[1];
-  if (validDay(day, today)) return { day, source: "frontmatter" };
+  if (property) return { day: property, source: "frontmatter" };
 }
 
 export function recordedNet(data: Data): Map<string, number> {

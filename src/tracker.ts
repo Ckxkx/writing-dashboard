@@ -1,7 +1,7 @@
 import { cancelTimer, scheduleTimer, type Timer } from "./timers";
 import { Activity } from "./activity";
 import { dateKey } from "./dates";
-import { indexDate, recordedNet } from "./history";
+import { createdDay, indexDate, recordedNet } from "./history";
 import { importPath, included, INDEX_VERSION, type Day, type History } from "./model";
 import { MAX_SOURCE, sameText } from "./words";
 
@@ -11,7 +11,10 @@ export interface VaultSource {
   exists(path: string): boolean;
   stat?(path: string): { ctime: number } | undefined;
 }
-interface Task { created: boolean; day: string; mixed: boolean; silent: boolean; due: number; since: number }
+interface Task {
+  created: boolean; day: string; mixed: boolean; silent: boolean; due: number; since: number;
+  imported?: Promise<string | null>;
+}
 interface Draft { source: string; day: string; mixed: boolean }
 const debounce = 170, maxDelay = 650;
 const yieldUI = () => new Promise<void>(resolve => scheduleTimer(resolve, 0));
@@ -71,7 +74,7 @@ export class Tracker {
           // additions already belong to the dates on which they were observed.
           const words = Math.max(0, file.count - (tracked ?? 0));
           if (words > 0 || tracked === undefined) {
-            const date = indexDate(source, this.vault.stat?.(path), today);
+            const date = indexDate(source, this.vault.stat?.(path), today, data.settings.preferCreated);
             if (date) (history.days[date.day] ??= {})[file.id] = { path, words, source: date.source };
           }
         }
@@ -98,7 +101,7 @@ export class Tracker {
   watch(path: string): void {
     const { activity } = this;
     if (this.closed || !included(path, activity.data.settings) || this.watches.has(path) ||
-      this.tasks.get(path)?.created || activity.hasSnapshot(path)) return;
+      this.tasks.get(path)?.created || this.tasks.get(path)?.imported || activity.hasSnapshot(path)) return;
     const id = activity.data.files[path]?.id;
     const pending = this.vault.read(path).then(source => {
       if (source === null || this.closed || this.activity !== activity || this.watches.get(path) !== pending ||
@@ -152,7 +155,15 @@ export class Tracker {
     if (!this.closed) this.changed(false);
   }
 
-  enqueue(path: string, created = false, day = this.localDay(), silent = false): void {
+  arrive(path: string, blank: boolean): void {
+    if (this.closed || !included(path, this.activity.data.settings)) return;
+    // A file that arrives with content may be a note copied by sync. Take
+    // its initial body before autosaves can turn it into today's writing.
+    this.enqueue(path, blank, this.localDay(), false, blank ? undefined : this.vault.read(path));
+  }
+
+  enqueue(path: string, created = false, day = this.localDay(), silent = false,
+    imported?: Promise<string | null>): void {
     if (this.closed || !included(path, this.activity.data.settings)) return;
     const old = this.tasks.get(path);
     const now = Date.now();
@@ -162,8 +173,21 @@ export class Tracker {
       day, mixed: !!old && (old.mixed || old.day !== day),
       silent: silent || !tracking || !!old?.silent,
       since: old?.since ?? now, due: Math.min(now + debounce, (old?.since ?? now) + maxDelay),
+      imported: old?.imported ?? imported,
     });
     this.schedule();
+  }
+
+  private indexArrival(path: string, source: string, today: string): void {
+    this.activity.observe(path, source);
+    const { data } = this.activity;
+    const file = data.files[path];
+    if (file.count === null) return;
+    const date = indexDate(source, this.vault.stat?.(path), today, data.settings.preferCreated);
+    if (!date) return;
+    const history = data.history?.indexVersion === INDEX_VERSION ? data.history
+      : (data.history = { indexVersion: INDEX_VERSION, days: {} });
+    (history.days[date.day] ??= {})[file.id] = { path, words: file.count, source: date.source };
   }
 
   move(from: string, to: string, folder = false): void {
@@ -246,6 +270,9 @@ export class Tracker {
         if (this.watches.has(path)) await this.watches.get(path);
         if (this.closed || generation !== this.generation) break;
         if (this.tasks.get(path) !== task) continue;
+        const initial = task.imported ? await task.imported : undefined;
+        if (this.closed || generation !== this.generation) break;
+        if (this.tasks.get(path) !== task) continue;
         const source = await this.vault.read(path);
         if (this.closed || generation !== this.generation) break;
         if (this.tasks.get(path) !== task) continue;
@@ -257,7 +284,15 @@ export class Tracker {
         // after midnight. Unmatched disk reads still use the save event date.
         const day = matched?.day ?? task.day;
         const mixed = matched?.mixed ?? (task.mixed || task.day !== this.localDay());
-        this.activity.observe(path, source, task.silent ? undefined : { ...task, day, mixed });
+        const property = source !== null && task.created && !matched ? createdDay(source, this.localDay()) : undefined;
+        if (!this.activity.data.files[path] && source !== null && (task.imported || (property && property < day))) {
+          this.indexArrival(path, initial ?? source, this.localDay());
+          if (initial !== undefined && initial !== null && !sameText(initial, source)) {
+            this.activity.observe(path, source, task.silent ? undefined : { day, created: false, mixed });
+          }
+        } else {
+          this.activity.observe(path, source, task.silent ? undefined : { ...task, day, mixed });
+        }
         if (matched) this.drafts.delete(path);
         dirty = true;
         if (performance.now() - start > 10) {

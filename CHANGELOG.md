@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.8]
+
+- Prefer a valid created property for note dates so synced notes keep the same indexed day across devices. File creation time remains a fallback and can still be selected as the priority.
+- Add created automatically to newly opened blank notes without replacing existing properties. Both settings can be turned off separately.
+- Index notes that arrive with content by their note date rather than counting the entire body as new writing today.
+
+Update the three plugin files together and keep data.json. The upgraded index refreshes known notes without changing their recorded daily edits.
+
 ## [0.3.7]
 
 - On mobile, rebuilding without an import scope now offers to import older notes instead of only refreshing known notes.
@@ -41,6 +49,7 @@ Install or update by placing main.js, manifest.json and styles.css in the same p
 - 提供本地笔记索引、Markdown 计数设置、路径排除及重建索引功能。
 
 支持 Obsidian 1.8.7 或更新版本。首次安装请下载 ZIP 解压；从本地开发版升级时，覆盖插件文件并保留 `data.json`。
+
 
 
 

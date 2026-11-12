@@ -36,7 +36,8 @@ export function countable(text: string, options: Pick<Settings, "frontmatter" | 
   const yaml = readFrontmatter(text);
   const parts: string[] = [];
   if (yaml) {
-    if (options.frontmatter) parts.push(yaml[1], " ");
+    // The creation date is metadata, including when YAML counting is enabled.
+    if (options.frontmatter) parts.push(yaml[1].replace(/^(?:created|"created"|'created'):[^\r\n]*/gim, ""), " ");
     text = text.slice(yaml[0].length);
   }
   for (const block of md.parse(text, {})) {

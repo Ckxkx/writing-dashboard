@@ -1,13 +1,15 @@
-import { Notice, Platform, Plugin, TFile, TFolder, type TAbstractFile, type WorkspaceLeaf } from "obsidian";
+import { MarkdownView, Notice, Platform, Plugin, TFile, TFolder, type TAbstractFile, type WorkspaceLeaf } from "obsidian";
 import { Activity } from "./activity";
 import { dateKey } from "./dates";
-import { fresh, importPath, INDEX_VERSION, load, type Data, type Settings } from "./model";
+import { fresh, importPath, included, INDEX_VERSION, load, type Data, type Settings } from "./model";
+import { addCreatedIfMissing, NewNoteDates } from "./creation";
 import { ImportModal } from "./import-modal";
 import { DashboardView, VIEW } from "./view";
 import { DashboardSettings } from "./settings";
 import { Tracker } from "./tracker";
 import { Storage } from "./storage";
 import { timelineDay } from "./history";
+import { readFrontmatter, sameText } from "./words";
 
 const formatter = new Intl.NumberFormat("zh-CN");
 
@@ -39,6 +41,9 @@ export default class WritingDashboard extends Plugin {
   private building?: Promise<void>;
   private renderTimer?: number;
   private status?: HTMLButtonElement;
+  private readonly newNotes = new NewNoteDates<TFile>();
+  private readonly stamping = new WeakSet<TFile>();
+  private readonly stampAgain = new WeakSet<TFile>();
 
   get activity(): Activity { return this.tracker.activity; }
   get data(): Data { return this.activity.data; }
@@ -107,7 +112,10 @@ export default class WritingDashboard extends Plugin {
       workspace.detachLeavesOfType("writing-dashboard");
       void this.prepareSideLeaf().catch(error => console.error("Writing Dashboard", error));
       const watch = (file: TFile | null) => {
-        if (file?.extension.toLowerCase() === "md") this.tracker.watch(file.path);
+        if (file?.extension.toLowerCase() !== "md") return;
+        this.tracker.watch(file.path);
+        this.newNotes.opened(file);
+        void this.stampNewNote(file);
       };
       this.registerEvent(workspace.on("file-open", watch));
       this.registerEvent(workspace.on("file-menu", (menu, entry) => {
@@ -122,15 +130,31 @@ export default class WritingDashboard extends Plugin {
         if (info.file?.extension.toLowerCase() === "md") this.tracker.edit(info.file.path, editor.getValue());
       }));
       this.registerEvent(vault.on("create", file => {
-        if (file instanceof TFile) this.tracker.enqueue(file.path, true);
+        if (!(file instanceof TFile) || !included(file.path, this.data.settings)) return;
+        const blank = file.stat.size === 0;
+        this.tracker.arrive(file.path, blank);
+        if (blank && this.data.settings.autoCreated) {
+          this.newNotes.created(file, dateKey());
+          if (workspace.getActiveFile() === file) {
+            this.newNotes.opened(file);
+            void this.stampNewNote(file);
+          }
+        }
       }));
       this.registerEvent(vault.on("modify", file => {
-        if (file instanceof TFile) this.tracker.enqueue(file.path);
+        if (file instanceof TFile) {
+          this.tracker.enqueue(file.path);
+          void this.stampNewNote(file);
+        }
       }));
       this.registerEvent(vault.on("rename", (file, old) => {
         this.tracker.move(old, file.path, file instanceof TFolder);
+        if (file instanceof TFile) void this.stampNewNote(file);
       }));
-      this.registerEvent(vault.on("delete", file => this.tracker.remove(file.path, file instanceof TFolder)));
+      this.registerEvent(vault.on("delete", file => {
+        if (file instanceof TFile) this.newNotes.done(file);
+        this.tracker.remove(file.path, file instanceof TFolder);
+      }));
       void this.tracker.baseline(this.data.history?.indexVersion !== INDEX_VERSION);
       watch(workspace.getActiveFile());
     });
@@ -142,6 +166,38 @@ export default class WritingDashboard extends Plugin {
       const now = dateKey();
       if (today !== now) { today = now; this.refresh(); }
     }, 30_000));
+  }
+
+  private async stampNewNote(file: TFile): Promise<void> {
+    const day = this.newNotes.pending(file);
+    if (!day || this.stopped) return;
+    if (this.stamping.has(file)) {
+      this.stampAgain.add(file);
+      return;
+    }
+    const { vault, workspace, fileManager } = this.app;
+    this.stamping.add(file);
+    try {
+      const source = await vault.cachedRead(file);
+      if (this.stopped || !this.data.settings.autoCreated || !included(file.path, this.data.settings) ||
+        vault.getAbstractFileByPath(file.path) !== file || !this.newNotes.pending(file)) {
+        this.newNotes.done(file);
+        return;
+      }
+      const active = workspace.getActiveViewOfType(MarkdownView);
+      // Never apply a disk edit over a newer editor buffer. Autosave will
+      // retry with the original creation day captured in the create event.
+      if (active?.file === file && !sameText(active.editor.getValue(), source)) return;
+      this.newNotes.done(file);
+      const yaml = readFrontmatter(source);
+      if (yaml && /^(?:created|"created"|'created'):/im.test(yaml[1])) return;
+      await fileManager.processFrontMatter(file, (frontmatter: unknown) => addCreatedIfMissing(frontmatter, day));
+    } catch (error) {
+      console.warn("Writing Dashboard: could not set created date", file.path, error);
+    } finally {
+      this.stamping.delete(file);
+      if (this.stampAgain.delete(file) && this.newNotes.pending(file)) void this.stampNewNote(file);
+    }
   }
 
   private show(toggle = false): void {
@@ -193,7 +249,7 @@ export default class WritingDashboard extends Plugin {
       if (this.stopped) return;
       Object.assign(this.data.settings, patch);
       if (rebaseline) void this.tracker.baseline(this.data.history?.indexVersion !== INDEX_VERSION ||
-        ["frontmatter", "codeBlocks", "folders", "paths"].some(key => Object.hasOwn(patch, key)));
+        ["frontmatter", "codeBlocks", "folders", "paths", "preferCreated"].some(key => Object.hasOwn(patch, key)));
       this.store.change();
       this.refresh();
     };
