@@ -46,12 +46,28 @@ test("separates insertions and deletions, including replacements with zero net g
   assert.deepEqual(difference(["x", "x"], ["x", "x"]), { added: 0, removed: 0, net: 0 });
 });
 
-test("large replacements decline exact splits and retain known net growth", () => {
+test("large replacements retain a confirmed minimum even when the exact split is unavailable", () => {
   const a = new Activity(fresh());
   a.observe("Note.md", "alpha ".repeat(800));
   a.observe("Note.md", "beta ".repeat(801), { day: "2026-01-01", created: false, mixed: false });
-  assert.deepEqual(tally(a.data.days["2026-01-01"]), { added: 0, net: 1, created: 0, skipped: 1, edited: 1 });
+  assert.deepEqual(tally(a.data.days["2026-01-01"]), { added: 1, net: 1, created: 0, skipped: 1, edited: 1 });
   assert.equal(countable("a".repeat(MAX_SOURCE + 1), defaults), null);
+});
+
+test("a missing in-memory baseline still exposes positive net growth without doubling legacy counts", () => {
+  const original = new Activity(fresh());
+  original.observe("mobile.md", "旧稿");
+  const a = new Activity(load(JSON.parse(JSON.stringify(original.data))));
+  const day = "2026-11-12";
+  const preview = a.compareDraft("mobile.md", "旧稿新增", false, false);
+  assert.deepEqual(preview && [preview.added, preview.skipped], [2, 1]);
+  a.observe("mobile.md", "旧稿新增", { day, created: false, mixed: false });
+  assert.equal(timelineDay(a.data, day).words, 2);
+  const recorded = Object.values(a.data.days[day].notes)[0];
+  recorded.added = 0; // Legacy partial records preserved net but displayed zero.
+  assert.equal(timelineDay(a.data, day).words, 2);
+  recorded.added = 3;
+  assert.equal(timelineDay(a.data, day).words, 3);
 });
 
 function fixture(initial: Record<string, string> = {}, first = "2026-12-31") {

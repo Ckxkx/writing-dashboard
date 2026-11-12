@@ -152,6 +152,9 @@ button.wd-status-button, .status-bar .status-bar-item button.wd-status-button {
   cursor: pointer;
 }
 .wd-status-button:hover { color: var(--text-normal); }
+.wd-import-hint { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.wd-import-modal textarea { width: 100%; min-height: 5em; }
+.wd-import-modal .setting-item:first-of-type .setting-item-control { flex: 1; }
 .setting-item-control button.wd-destructive { color: var(--text-error); }
 .wd-cards {
   display: grid;

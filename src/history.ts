@@ -61,7 +61,9 @@ export function timelineDay(data: Data, day: string, live?: Day) {
   for (const bucket of [data.days[day], live]) {
     for (const [id, note] of Object.entries(bucket?.notes ?? {})) {
       const prior = notes.get(id);
-      notes.set(id, { id, path: note.path, words: (prior?.words ?? 0) + note.added,
+      // Older versions sometimes recorded only the net growth of a partial edit.
+      const words = note.skipped ? Math.max(note.added, note.net) : note.added;
+      notes.set(id, { id, path: note.path, words: (prior?.words ?? 0) + words,
         indexed: prior?.indexed ?? 0, source: prior?.source, skipped: (prior?.skipped ?? 0) + note.skipped });
     }
   }

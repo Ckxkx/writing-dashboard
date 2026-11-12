@@ -39,7 +39,7 @@ To upgrade, replace all three files together and keep data.json. You do not need
 
 1. Click the ribbon icon or the desktop status-bar count, or run **Writing Dashboard: Open dashboard**. Click the status bar again to close the open dashboard.
 2. Choose a year or select a date to see its notes. Scroll the heatmap left for earlier dates; use the Today button (`今天` in the screenshots) to return.
-3. To import older notes, open the plugin settings and enter individual Markdown paths or folders under **补录旧笔记** (Import older notes), one per line. Choose **保存并重建** (Save and rebuild). The Vault root is not an import target. **··· → Rebuild index** refreshes known notes and these saved selections.
+3. To import older notes, open the plugin settings and enter individual Markdown paths or folders under **补录旧笔记** (Import older notes), one per line. Choose **保存并重建** (Save and rebuild). The Vault root is not an import target. **··· → Rebuild index** refreshes known notes and these saved selections. On mobile, if no scope is saved, this opens the import prompt. You can also long-press a note or folder in the file explorer and choose **补录写作统计** (Import into writing statistics).
 
 <details>
 <summary>View the full dashboard</summary>
@@ -54,11 +54,11 @@ To upgrade, replace all three files together and keep data.json. You do not need
 - **Daily and monthly counts** combine indexed text from existing notes with confirmed additions after the plugin is enabled. Indexed text uses the note's date; new additions use the local editing date. Each note counts once per day. A day with a positive word count counts as a writing day.
 - **Existing notes** use the file's creation time first and fall back to the YAML `created` field if the timestamp is missing, invalid, or in the future. If neither date works, the note still contributes to vault totals. The index cannot reconstruct what you actually wrote each day before installing the plugin.
 - Each Han character counts as one unit. Other words and continuous runs of digits count as one unit each. YAML, code blocks, inline code, images, and embeds are excluded by default. Settings can include YAML or code blocks; inline code remains excluded.
-- Preview counts are confirmed on save. Saving the same content twice does not count it twice. Changes that cannot be measured reliably are flagged. Deleting text does not subtract already confirmed additions from historical counts.
+- Preview counts are confirmed on save. Saving the same content twice does not count it twice. When only a positive net change can be confirmed, the dashboard shows that minimum and marks the change as partial. Deleting text does not subtract already confirmed additions from historical counts.
 
 ## Data and privacy
 
-Writing Dashboard runs locally and does not send notes, statistics, or telemetry. Startup refreshes only notes already known to the plugin. It also tracks Markdown notes you open, create, or edit. A manual import scans only the Markdown files or folders you select, and skips excluded paths. The totals cover those known and imported notes. Upgrading preserves existing statistics. Settings and statistics are stored in your vault's `.obsidian/plugins/writing-dashboard/data.json`. This file contains note paths and counts, but no note bodies. Quit Obsidian before backing it up. The plugin does not merge statistics written concurrently by multiple devices.
+Writing Dashboard runs locally and does not send notes, statistics, or telemetry. Startup refreshes only notes already known to the plugin. It also tracks Markdown notes you open, create, or edit. A manual import scans only the Markdown files or folders you select, and skips excluded paths. The totals cover those known and imported notes. Upgrading preserves existing statistics. Settings and statistics are stored in your vault's `.obsidian/plugins/writing-dashboard/data.json`. This file contains note paths and counts, but no note bodies. Quit Obsidian before backing it up. Rebuilding on one device does not transfer daily history from another device. The plugin does not merge statistics written concurrently by multiple devices.
 
 ## Development
 

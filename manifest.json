@@ -1,7 +1,7 @@
 {
   "id": "writing-dashboard",
   "name": "Writing Dashboard",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "minAppVersion": "1.8.7",
   "description": "Track your writing locally with a yearly heatmap and monthly statistics.",
   "author": "Writing Dashboard contributors",

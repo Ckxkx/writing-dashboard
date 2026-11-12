@@ -40,9 +40,12 @@ export class Activity {
     if (!words) return;
     const before = previous?.words ?? (created && !file ? [] : undefined);
     const delta = !mixed && before ? difference(before, words) : null;
+    const priorCount = file ? file.count : created ? 0 : null;
+    const knownNet = !mixed && priorCount !== null ? words.length - priorCount : 0;
     return {
       id: file ? String(file.id) : "draft:" + path,
-      added: delta?.added ?? 0, removed: delta?.removed ?? 0, skipped: Number(!delta),
+      added: delta?.added ?? Math.max(0, knownNet), removed: delta?.removed ?? Math.max(0, -knownNet),
+      skipped: Number(!delta),
       net: words.length - (file?.count ?? 0),
     };
   }
@@ -95,7 +98,10 @@ export class Activity {
       } else {
         const prev = old ? old.count : event.created ? 0 : null;
         const net = !event.mixed && words && prev !== null ? words.length - prev : 0;
-        this.record(event.day, id, path, event.created, { added: 0, removed: 0, net }, true);
+        // A positive net change guarantees at least this many insertions,
+        // even if the exact split between insertions and deletions is unavailable.
+        this.record(event.day, id, path, event.created,
+          { added: Math.max(0, net), removed: Math.max(0, -net), net }, true);
       }
     }
     this.remember(id, source, words);

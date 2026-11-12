@@ -1,7 +1,8 @@
-import { Notice, Plugin, TFile, TFolder, type TAbstractFile, type WorkspaceLeaf } from "obsidian";
+import { Notice, Platform, Plugin, TFile, TFolder, type TAbstractFile, type WorkspaceLeaf } from "obsidian";
 import { Activity } from "./activity";
 import { dateKey } from "./dates";
-import { fresh, INDEX_VERSION, load, type Data, type Settings } from "./model";
+import { fresh, importPath, INDEX_VERSION, load, type Data, type Settings } from "./model";
+import { ImportModal } from "./import-modal";
 import { DashboardView, VIEW } from "./view";
 import { DashboardSettings } from "./settings";
 import { Tracker } from "./tracker";
@@ -9,6 +10,11 @@ import { Storage } from "./storage";
 import { timelineDay } from "./history";
 
 const formatter = new Intl.NumberFormat("zh-CN");
+
+function importable(entry: TAbstractFile | null): boolean {
+  return entry instanceof TFolder && !entry.isRoot() ||
+    entry instanceof TFile && entry.extension.toLowerCase() === "md";
+}
 
 function selectedMarkdownPaths(entries: readonly TAbstractFile[], settings: Settings): string[] {
   const result: string[] = [], stack = [...entries];
@@ -86,11 +92,14 @@ export default class WritingDashboard extends Plugin {
     this.addCommand({ id: "open", name: "Open dashboard", callback: () => this.show() });
     this.addCommand({ id: "build-statistics", name: "重建写作索引", callback: () => {
       this.show();
-      this.buildStatistics();
+      this.requestRebuild();
     } });
-    this.status = this.addStatusBarItem().createEl("button", { cls: "wd-status-button", type: "button" });
-    this.status.title = "今日篇数和字数。点击展开或收起右侧写作仪表盘。";
-    this.registerDomEvent(this.status, "click", () => this.show(true));
+    this.addCommand({ id: "import-notes", name: "补录旧笔记", callback: () => this.openImport() });
+    if (!Platform.isMobile) {
+      this.status = this.addStatusBarItem().createEl("button", { cls: "wd-status-button", type: "button" });
+      this.status.title = "今日篇数和字数。点击展开或收起右侧写作仪表盘。";
+      this.registerDomEvent(this.status, "click", () => this.show(true));
+    }
     this.updateStatus();
     this.addSettingTab(new DashboardSettings(this.app, this));
     workspace.onLayoutReady(() => {
@@ -101,6 +110,14 @@ export default class WritingDashboard extends Plugin {
         if (file?.extension.toLowerCase() === "md") this.tracker.watch(file.path);
       };
       this.registerEvent(workspace.on("file-open", watch));
+      this.registerEvent(workspace.on("file-menu", (menu, entry) => {
+        const path = importPath(entry.path);
+        if (!path || !importable(entry)) return;
+        menu.addItem(item => item.setTitle("补录写作统计").setIcon("chart-no-axes-combined").onClick(() => {
+          this.update({ importPaths: [...new Set([...this.data.settings.importPaths, path])] });
+          this.buildStatistics();
+        }));
+      }));
       this.registerEvent(workspace.on("editor-change", (editor, info) => {
         if (info.file?.extension.toLowerCase() === "md") this.tracker.edit(info.file.path, editor.getValue());
       }));
@@ -198,14 +215,48 @@ export default class WritingDashboard extends Plugin {
     void this.store.flush();
   }
 
+  openImport(offerRefresh = false): void {
+    new ImportModal(this.app, this, offerRefresh).open();
+  }
+
+  requestRebuild(): void {
+    if (Platform.isMobile && !this.data.settings.importPaths.length) this.openImport(true);
+    else this.buildStatistics();
+  }
+
+  saveImportPaths(value: string, requireSelection = false): boolean {
+    const requested = value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (!requested.length && requireSelection) {
+      new Notice("请填写至少一个要补录的笔记或文件夹路径。");
+      return false;
+    }
+    const paths = new Set<string>();
+    for (const line of requested) {
+      const path = importPath(line);
+      if (!path || !importable(this.app.vault.getAbstractFileByPath(path))) {
+        new Notice("找不到这个 Markdown 笔记或文件夹，或选择了 Vault 根目录：" + line);
+        return false;
+      }
+      paths.add(path);
+    }
+    this.update({ importPaths: [...paths] });
+    this.buildStatistics();
+    return true;
+  }
+
   buildStatistics(): void {
     if (this.building) return;
     this.building = this.configuring = this.configuring.then(async () => {
       await this.tracker.settle();
       if (this.stopped) return;
-      await this.tracker.baseline(true, this.data.settings.importPaths);
+      const paths = this.data.settings.importPaths;
+      const missing = paths.filter(path => !importable(this.app.vault.getAbstractFileByPath(path))).length;
+      await this.tracker.baseline(true, paths);
       if (this.stopped) return;
-      new Notice("Writing Dashboard：已重建写作索引。");
+      const total = formatter.format(this.activity.fileCount);
+      const extra = missing ? `；有 ${formatter.format(missing)} 个补录路径在本机不可用`
+        : !paths.length ? "；可在文件列表中选择要补录的旧笔记" : "";
+      new Notice(`Writing Dashboard：索引已更新，本机纳入 ${total} 篇笔记${extra}。`);
     }).catch(error => {
       console.error("Writing Dashboard", error);
       if (!this.stopped) new Notice("Writing Dashboard：重建索引失败。");

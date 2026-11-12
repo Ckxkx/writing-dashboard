@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, TFile, moment, setIcon, type WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, Notice, Platform, TFile, moment, setIcon, type WorkspaceLeaf } from "obsidian";
 import type WritingDashboard from "./main";
 import { calendar, dateKey, localDate } from "./dates";
 import { timelineDates, timelineDay, timelineYear } from "./history";
@@ -79,8 +79,10 @@ export class DashboardView extends ItemView {
     const scanning = this.plugin.tracker.scanning;
     menu.addItem(item => item.setTitle(scanning ? "正在扫描笔记…" : "重建索引").setIcon("refresh-cw")
       .setDisabled(scanning).onClick(() => {
-        if (!this.plugin.tracker.scanning) this.plugin.buildStatistics();
+        if (!this.plugin.tracker.scanning) this.plugin.requestRebuild();
       }));
+    menu.addItem(item => item.setTitle("补录旧笔记…").setIcon("folder-plus")
+      .setDisabled(scanning).onClick(() => this.plugin.openImport()));
     menu.onHide(() => {
       if (this.headerMenu !== menu) return;
       this.headerMenu = undefined;
@@ -162,6 +164,13 @@ export class DashboardView extends ItemView {
       if (activity.unread) status.createDiv({ text: `${num(activity.unread)} 篇笔记无法读取或超过计数上限，未计入字数。` });
     }
     this.cards(root, activity.total + liveNet, activity.fileCount);
+    if (Platform.isMobile && !data.settings.importPaths.length && activity.fileCount < 2 &&
+        !this.plugin.tracker.scanning) {
+      const hint = root.createDiv({ cls: "wd-status wd-import-hint" });
+      hint.createSpan({ text: "只显示本机已纳入的笔记。" });
+      hint.createEl("button", { type: "button", text: "补录旧笔记", attr: { "data-wd-focus": "import-notes" } })
+        .onclick = () => this.plugin.openImport();
+    }
     this.heatmap(root, today, stats, prevScroll);
     if (data.settings.monthly) this.chart(root, stats.monthly, today);
     if (focusKey) {
@@ -275,7 +284,7 @@ export class DashboardView extends ItemView {
     const top = detail.createDiv({ cls: "wd-detail-top" });
     top.createEl("h3", { text: this.format(this.selected) });
     top.createSpan({ text: num(day.words) + " 字 · " + num(day.count) + " 篇" });
-    if (day.skipped) detail.createEl("p", { text: "有变更未完整计量。" });
+    if (day.skipped) detail.createEl("p", { text: "有变更无法精确拆分，显示可确认的最少新增字数。" });
     const notes = day.notes.sort((a, b) => b.words - a.words || a.path.localeCompare(b.path));
     if (!notes.length) {
       detail.createEl("p", { text: "这一天没有记录。" });

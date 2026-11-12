@@ -1,6 +1,6 @@
-import { App, Modal, normalizePath, Notice, PluginSettingTab, Setting, TFile, TFolder, type ButtonComponent, type SettingDefinitionItem } from "obsidian";
+import { App, Modal, normalizePath, Notice, PluginSettingTab, Setting, type ButtonComponent, type SettingDefinitionItem } from "obsidian";
 import type WritingDashboard from "./main";
-import { importPath, type Settings } from "./model";
+import type { Settings } from "./model";
 
 function destructive(button: ButtonComponent): ButtonComponent {
   return button.setClass("wd-destructive");
@@ -77,23 +77,7 @@ export class DashboardSettings extends PluginSettingTab {
               let value = plugin.data.settings.importPaths.join("\n");
               setting.addTextArea(text => text.setPlaceholder("日记\n草稿/旧稿.md").setValue(value)
                 .onChange(next => { value = next; }))
-                .addButton(button => button.setButtonText("保存并重建").onClick(() => {
-                  const requested = value.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
-                  const imports: string[] = [];
-                  for (const line of requested) {
-                    const path = importPath(line);
-                    const entry = path && plugin.app.vault.getAbstractFileByPath(path);
-                    const valid = entry instanceof TFolder && !entry.isRoot() ||
-                      entry instanceof TFile && entry.extension.toLowerCase() === "md";
-                    if (!path || !valid) {
-                      new Notice("请填写有效的 Markdown 笔记或文件夹路径，不能选择 Vault 根目录：" + line);
-                      return;
-                    }
-                    imports.push(path);
-                  }
-                  plugin.update({ importPaths: [...new Set(imports)] });
-                  plugin.buildStatistics();
-                }));
+                .addButton(button => button.setButtonText("保存并重建").onClick(() => { plugin.saveImportPaths(value); }));
             },
           },
         ],
